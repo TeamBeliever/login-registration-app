@@ -2,57 +2,76 @@
 include "db.php";
 session_start();
 
-// agar login nahi hai to redirect
-if (!isset($_SESSION['id'])) {
+// Session check for user
+if(isset($_SESSION['user_id'])){
+    $uid = $_SESSION['user_id'];
+} else {
     header("Location: login.php");
-    exit();
+    exit;
 }
 
-// delete
-if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
-    $stmt = $conn->prepare("DELETE FROM users WHERE id=?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    header("Location: dashboard.php");
-    exit();
+// Fetch user data
+$row = $conn->query("SELECT * FROM users WHERE id=$uid")->fetch_assoc();
+
+// Status check alert
+if($row['status']=="pending"){
+    echo "<script>alert('Your account is still pending approval by admin');</script>";
+} elseif($row['status']=="rejected"){
+    // agar reason diya hai to dikhayenge, warna default reason dikhayenge
+    $reason = !empty($row['reject_reason']) ? $row['reject_reason'] : 'Documents not clear, please upload again';
+    echo "<script>alert('Your account has been rejected by admin. Reason: $reason');</script>";
+} elseif($row['status']=="approved"){
+    echo "<script>alert('Your account is approved');</script>";
 }
 
-// update
-if (isset($_POST['update'])) {
-    $id = $_POST['id'];
+// Update user data
+if(isset($_POST['update'])){
     $name = $_POST['name'];
     $mobile = $_POST['mobile'];
     $email = $_POST['email'];
     $dob = $_POST['dob'];
     $gender = $_POST['gender'];
     $username = $_POST['username'];
-    $password = !empty($_POST['password']) ? password_hash($_POST['password'], PASSWORD_BCRYPT) : $_POST['old_password'];
 
-    // profile pic
-    if (!empty($_FILES['profile_pic']['name'])) {
-        $profile_pic = "uploads/" . time() . "_" . $_FILES['profile_pic']['name'];
-        move_uploaded_file($_FILES['profile_pic']['tmp_name'], $profile_pic);
-    } else {
-        $profile_pic = $_POST['old_profile'];
+    // Password update
+    if(!empty($_POST['password'])){
+        $password = password_hash($_POST['password'], PASSWORD_BCRYPT);
+        $conn->query("UPDATE users SET password='$password' WHERE id=$uid");
     }
 
-    // id card
-    if (!empty($_FILES['id_card']['name'])) {
-        $id_card = "uploads/" . time() . "_" . $_FILES['id_card']['name'];
-        move_uploaded_file($_FILES['id_card']['tmp_name'], $id_card);
-    } else {
-        $id_card = $_POST['old_id_card'];
+    // ID Card upload
+    if(isset($_FILES['id_card']) && $_FILES['id_card']['tmp_name'] != ""){
+        $id_card_name = time()."_".$_FILES['id_card']['name'];
+        $id_card_path = "uploads/".$id_card_name;
+        move_uploaded_file($_FILES['id_card']['tmp_name'], $id_card_path);
+        $conn->query("UPDATE users SET id_card='$id_card_path' WHERE id=$uid");
+        $row['id_card'] = $id_card_path;
     }
 
-    $stmt = $conn->prepare("UPDATE users SET name=?, mobile=?, email=?, dob=?, gender=?, username=?, password=?, id_card=?, profile_pic=? WHERE id=?");
-    $stmt->bind_param("sssssssssi", $name, $mobile, $email, $dob, $gender, $username, $password, $id_card, $profile_pic, $id);
+    // Profile pic upload
+    if(isset($_FILES['profile_pic']) && $_FILES['profile_pic']['tmp_name'] != ""){
+        $profile_name = time()."_".$_FILES['profile_pic']['name'];
+        $profile_path = "uploads/".$profile_name;
+        move_uploaded_file($_FILES['profile_pic']['tmp_name'], $profile_path);
+        $conn->query("UPDATE users SET profile_pic='$profile_path' WHERE id=$uid");
+        $row['profile_pic'] = $profile_path;
+    }
+
+    // Update other fields
+    $stmt = $conn->prepare("UPDATE users SET name=?, mobile=?, email=?, dob=?, gender=?, username=? WHERE id=?");
+    $stmt->bind_param("ssssssi",$name,$mobile,$email,$dob,$gender,$username,$uid);
     $stmt->execute();
-    header("Location: dashboard.php");
-    exit();
+
+    echo "<script>alert('Updated Successfully');window.location='dashboard.php';</script>";
 }
 
-$result = $conn->query("SELECT * FROM users");
+// Delete account
+if(isset($_POST['delete'])){
+    $conn->query("DELETE FROM users WHERE id=$uid");
+    session_destroy();
+    echo "<script>alert('Account Deleted Successfully');window.location='register.php';</script>";
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -63,84 +82,73 @@ $result = $conn->query("SELECT * FROM users");
 <body class="bg-light">
 <div class="container mt-5">
 <div class="card p-4 shadow-lg">
+<h3 class="text-center mb-4">Dashboard</h3>
 
-<!-- logout -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>Users Dashboard</h3>
-    <a href="logout.php" class="btn btn-danger">Logout</a>
-</div>
-
-<table class="table table-bordered text-center align-middle">
-<tr class="table-primary">
-    <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>DOB</th><th>Gender</th>
-    <th>Username</th><th>Password</th><th>ID Card</th><th>Profile Pic</th><th>Actions</th>
-</tr>
-
-<?php while ($row = $result->fetch_assoc()) { ?>
-<tr>
-    <td><?= $row['id']; ?></td>
-    <td><?= $row['name']; ?></td>
-    <td><?= $row['mobile']; ?></td>
-    <td><?= $row['email']; ?></td>
-    <td><?= $row['dob']; ?></td>
-    <td><?= $row['gender']; ?></td>
-    <td><?= $row['username']; ?></td>
-    <td>********</td>
-    <td><img src="<?= $row['id_card']; ?>" width="70" height="70"></td>
-    <td><img src="<?= $row['profile_pic']; ?>" width="70" height="70"></td>
-    <td>
-        <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#edit<?= $row['id']; ?>">Edit</button>
-        <a href="dashboard.php?delete=<?= $row['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this record?')">Delete</a>
-    </td>
-</tr>
-
-<!-- edit modal -->
-<div class="modal fade" id="edit<?= $row['id']; ?>" tabindex="-1">
-<div class="modal-dialog">
-<div class="modal-content">
 <form method="post" enctype="multipart/form-data">
-<div class="modal-header">
-    <h5 class="modal-title">Edit User</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-</div>
-<div class="modal-body">
-    <input type="hidden" name="id" value="<?= $row['id']; ?>">
-    <input type="hidden" name="old_profile" value="<?= $row['profile_pic']; ?>">
-    <input type="hidden" name="old_id_card" value="<?= $row['id_card']; ?>">
-    <input type="hidden" name="old_password" value="<?= $row['password']; ?>">
+    <div class="mb-3">
+        <label class="form-label">Full Name</label>
+        <input class="form-control" name="name" value="<?= $row['name'] ?>" required>
+    </div>
 
-    <div class="mb-2"><label>Name</label><input class="form-control" name="name" value="<?= $row['name']; ?>" required></div>
-    <div class="mb-2"><label>Mobile</label><input class="form-control" name="mobile" pattern="\d{10}" maxlength="10" value="<?= $row['mobile']; ?>" required></div>
-    <div class="mb-2"><label>Email</label><input class="form-control" name="email" value="<?= $row['email']; ?>" required></div>
-    <div class="mb-2"><label>DOB</label><input class="form-control" name="dob" type="date" value="<?= $row['dob']; ?>" required></div>
-    <div class="mb-2"><label>Gender</label>
+    <div class="mb-3">
+        <label class="form-label">Mobile Number</label>
+        <input class="form-control" name="mobile" value="<?= $row['mobile'] ?>" pattern="[0-9]{10}" maxlength="10" required>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input class="form-control" name="email" type="email" value="<?= $row['email'] ?>" required>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Date of Birth</label>
+        <input class="form-control" name="dob" type="date" value="<?= $row['dob'] ?>" required>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Gender</label>
         <select class="form-control" name="gender" required>
-            <option <?= $row['gender']=='Male'?'selected':''; ?>>Male</option>
-            <option <?= $row['gender']=='Female'?'selected':''; ?>>Female</option>
-            <option <?= $row['gender']=='Other'?'selected':''; ?>>Other</option>
+            <option value="Male" <?= $row['gender']=="Male"?"selected":"" ?>>Male</option>
+            <option value="Female" <?= $row['gender']=="Female"?"selected":"" ?>>Female</option>
+            <option value="Other" <?= $row['gender']=="Other"?"selected":"" ?>>Other</option>
         </select>
     </div>
-    <div class="mb-2"><label>Username</label><input class="form-control" name="username" value="<?= $row['username']; ?>" required></div>
-    <div class="mb-2"><label>Change Password</label><input class="form-control" name="password" type="password" placeholder="New password (optional)"></div>
-    <div class="mb-2"><label>ID Card</label><input class="form-control" type="file" name="id_card"></div>
-    <div class="mb-2"><label>Profile Pic</label><input class="form-control" type="file" name="profile_pic"></div>
-</div>
-<div class="modal-footer">
-    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-    <button type="submit" name="update" class="btn btn-success">Update</button>
-</div>
+
+    <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input class="form-control" name="username" value="<?= $row['username'] ?>" required>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Password (Change)</label>
+        <input class="form-control" name="password" type="password" placeholder="Enter new password">
+    </div>
+
+    <!-- ID Card -->
+    <div class="mb-3">
+        <label class="form-label">Upload ID Card</label>
+        <input class="form-control" name="id_card" type="file" accept="image/*">
+        <br>
+        <?php if(!empty($row['id_card'])): ?>
+            <img src="<?= $row['id_card'] ?>" width="100" class="rounded">
+        <?php endif; ?>
+    </div>
+
+    <!-- Profile Picture -->
+    <div class="mb-3">
+        <label class="form-label">Upload Profile Picture</label>
+        <input class="form-control" name="profile_pic" type="file" accept="image/*">
+        <br>
+        <?php if(!empty($row['profile_pic'])): ?>
+            <img src="<?= $row['profile_pic'] ?>" width="100" class="rounded">
+        <?php endif; ?>
+    </div>
+
+    <button class="btn btn-primary w-100" name="update">Update</button>
+    <button class="btn btn-danger w-100 mt-2" name="delete" onclick="return confirm('Are you sure you want to delete your account?');">Delete Account</button>
+    <a href="logout.php" class="btn btn-secondary w-100 mt-2">Logout</a>
 </form>
 </div>
 </div>
-</div>
-
-<?php } ?>
-</table>
-</div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
-
-

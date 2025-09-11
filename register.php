@@ -1,5 +1,5 @@
-<?php include "db.php"; ?>
-<?php
+<?php 
+include "db.php"; 
 if(isset($_POST['register'])){
     $name = $_POST['name'];
     $mobile = $_POST['mobile'];
@@ -17,10 +17,12 @@ if(isset($_POST['register'])){
     $profile_pic = "uploads/".time()."_".$_FILES['profile_pic']['name'];
     move_uploaded_file($_FILES['profile_pic']['tmp_name'], $profile_pic);
     
-    $stmt = $conn->prepare("INSERT INTO users(name,mobile,email,dob,gender,username,password,id_card,profile_pic) VALUES(?,?,?,?,?,?,?,?,?)");
-    $stmt->bind_param("sssssssss",$name,$mobile,$email,$dob,$gender,$username,$password,$id_card,$profile_pic);
+    // Database insert with status default pending
+    $stmt = $conn->prepare("INSERT INTO users(name,mobile,email,dob,gender,username,password,id_card,profile_pic,status) VALUES(?,?,?,?,?,?,?,?,?,?)");
+    $status = "pending";
+    $stmt->bind_param("ssssssssss",$name,$mobile,$email,$dob,$gender,$username,$password,$id_card,$profile_pic,$status);
     $stmt->execute();
-    echo "<script>alert('Registered Successfully');window.location='login.php';</script>";
+    echo "<script>alert('Registered Successfully. Pending admin approval.');window.location='login.php';</script>";
 }
 ?>
 <!DOCTYPE html>
@@ -96,5 +98,3 @@ function togglePassword(){
 </script>
 </body>
 </html>
-
-
