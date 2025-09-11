@@ -17,7 +17,7 @@ $row = $conn->query("SELECT * FROM users WHERE id=$uid")->fetch_assoc();
 if($row['status']=="pending"){
     echo "<script>alert('Your account is still pending approval by admin');</script>";
 } elseif($row['status']=="rejected"){
-    // agar reason diya hai to dikhayenge, warna default reason dikhayenge
+    // if reason provided then show, otherwise default reason show
     $reason = !empty($row['reject_reason']) ? $row['reject_reason'] : 'Documents not clear, please upload again';
     echo "<script>alert('Your account has been rejected by admin. Reason: $reason');</script>";
 } elseif($row['status']=="approved"){

@@ -6,7 +6,7 @@ if (isset($_POST['login'])) {
     $username = $_POST['username'];
     $password = $_POST['password'];
 
-    // sirf admin role wale users login karenge
+    // only admin role users can login
     $stmt = $conn->prepare("SELECT * FROM users WHERE username=? AND role='admin'");
     $stmt->bind_param("s", $username);
     $stmt->execute();

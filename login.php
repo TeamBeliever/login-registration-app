@@ -19,7 +19,7 @@ if(isset($_POST['login'])){
         $status = isset($user['status']) ? strtolower($user['status']) : 'pending';
 
         if($status === 'rejected'){
-            // agar DB me reason hai use lo, nahi to default reason (maine diya)
+            //  if db have reason then take it, otherwise show default reason
             $reason = !empty($user['reject_reason']) ? $user['reject_reason'] : 'Documents not clear - please re-upload clear ID and profile picture.';
             $js_reason = addslashes($reason);
             echo "<script>alert('Login rejected: {$js_reason}');window.location='login.php';</script>";
@@ -31,7 +31,7 @@ if(isset($_POST['login'])){
             exit;
         }
 
-        // approved ya admin login
+        // approved admin login
         if(isset($user['role']) && $user['role'] === 'admin'){
             $_SESSION['admin_id'] = $user['id'];
             $_SESSION['admin_name'] = $user['name'];
